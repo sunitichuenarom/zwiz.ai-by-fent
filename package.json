@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "richmenu": "node --env-file=.env.local scripts/setup-rich-menu.mjs"
+    "richmenu": "node --env-file=.env.local scripts/setup-rich-menu.mjs",
+    "cleardata": "node --env-file=.env.local scripts/clear-data.mjs"
   },
   "dependencies": {
     "@line/bot-sdk": "^11.3.0",
