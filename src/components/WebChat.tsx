@@ -1,25 +1,53 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import useSWR from "swr";
 import { ChatWindow } from "./ChatWindow";
 import { ConversationList } from "./ConversationList";
 import { Logo } from "./Logo";
 import { UserDetails } from "./UserDetails";
-import { DEMO_NOTICE, fetcher, POLL_INTERVAL_MS } from "@/lib/fetcher";
+import { DEMO_NOTICE, fetcher, FALLBACK_POLL_MS } from "@/lib/fetcher";
+import { CONVERSATIONS_KEY, useLiveUpdates } from "@/lib/useLiveUpdates";
 import type { ChatUser } from "@/types/chat";
 
 interface Props {
   bot: { displayName: string; basicId: string } | null;
 }
 
+const subscribeToNothing = () => () => {};
+const readPermission = () => "Notification" in window && Notification.permission === "granted";
+
 export function WebChat({ bot }: Props) {
-  const { data: users, error, mutate } = useSWR<ChatUser[]>("/api/conversations", fetcher, {
-    refreshInterval: POLL_INTERVAL_MS,
+  useLiveUpdates();
+  const { data: users, error, mutate } = useSWR<ChatUser[]>(CONVERSATIONS_KEY, fetcher, {
+    refreshInterval: FALLBACK_POLL_MS,
   });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = users?.find((user) => user.userId === selectedId) ?? null;
   const addFriendUrl = bot ? `https://line.me/R/ti/p/${encodeURIComponent(bot.basicId)}` : null;
+
+  const totalUnread = users?.reduce((sum, user) => sum + user.unread, 0) ?? 0;
+  const latestUnread = users?.find((user) => user.unread > 0);
+  const previousUnread = useRef(0);
+  const alreadyGranted = useSyncExternalStore(subscribeToNothing, readPermission, () => false);
+  const [grantedNow, setGrantedNow] = useState(false);
+  const canNotify = alreadyGranted || grantedNow;
+
+  useEffect(() => {
+    document.title = totalUnread > 0 ? `(${totalUnread}) Zwiz Chat` : "Zwiz Chat";
+    if (totalUnread > previousUnread.current && document.hidden && canNotify) {
+      new Notification(latestUnread?.displayName ?? "Zwiz Chat", {
+        body: latestUnread?.lastMessage ?? "มีข้อความใหม่",
+        tag: "zwiz-chat",
+      });
+    }
+    previousUnread.current = totalUnread;
+  }, [totalUnread, canNotify, latestUnread?.displayName, latestUnread?.lastMessage]);
+
+  async function enableNotifications() {
+    if (!("Notification" in window)) return;
+    setGrantedNow((await Notification.requestPermission()) === "granted");
+  }
 
   return (
     <main className="flex h-dvh flex-col">
@@ -31,11 +59,22 @@ export function WebChat({ bot }: Props) {
             เดโม
           </span>
         </div>
-        {bot && (
-          <p className="truncate text-[13px] text-neutral-300">
-            {bot.displayName} · {bot.basicId}
-          </p>
-        )}
+        <div className="flex min-w-0 items-center gap-3">
+          {!canNotify && (
+            <button
+              type="button"
+              onClick={() => void enableNotifications()}
+              className="shrink-0 rounded-lg border border-ink-soft px-2.5 py-1 text-xs text-neutral-300 hover:border-brand hover:text-white"
+            >
+              เปิดการแจ้งเตือน
+            </button>
+          )}
+          {bot && (
+            <p className="hidden truncate text-[13px] text-neutral-300 sm:block">
+              {bot.displayName} · {bot.basicId}
+            </p>
+          )}
+        </div>
       </header>
 
       <div className="flex min-h-0 flex-1">

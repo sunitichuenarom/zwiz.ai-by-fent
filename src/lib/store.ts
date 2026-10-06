@@ -11,6 +11,7 @@ const keys = {
   aiUser: (userId: string, hour: number) => `${NAMESPACE}:ai:user:${userId}:${hour}`,
   aiAll: (day: number) => `${NAMESPACE}:ai:all:${day}`,
   login: (ip: string) => `${NAMESPACE}:login:${ip}`,
+  events: `${NAMESPACE}:events`,
 };
 
 const MAX_USERS = 50;
@@ -39,10 +40,14 @@ export async function upsertUser(profile: {
   const pipeline = getRedis().pipeline();
   pipeline.hset(keys.user(userId), { displayName, pictureUrl: pictureUrl ?? "" });
   pipeline.zadd(keys.users, { nx: true }, { score: seenAt, member: userId });
+  pipeline.publish(keys.events, { userId });
   await pipeline.exec();
 }
 
-export async function addMessage(message: ChatMessage): Promise<void> {
+export async function addMessage(
+  message: ChatMessage,
+  options: { unread?: boolean } = {},
+): Promise<void> {
   const { userId } = message;
   const pipeline = getRedis().pipeline();
   pipeline.rpush(keys.messages(userId), message);
@@ -54,6 +59,8 @@ export async function addMessage(message: ChatMessage): Promise<void> {
     });
     pipeline.zadd(keys.users, { score: message.timestamp, member: userId });
   }
+  if (options.unread) pipeline.hincrby(keys.user(userId), "unread", 1);
+  pipeline.publish(keys.events, { userId });
   await pipeline.exec();
 }
 
@@ -81,7 +88,31 @@ export async function getMode(userId: string): Promise<ReplyMode> {
 }
 
 export async function setMode(userId: string, mode: ReplyMode): Promise<void> {
-  await getRedis().hset(keys.user(userId), { mode });
+  const pipeline = getRedis().pipeline();
+  pipeline.hset(keys.user(userId), { mode });
+  pipeline.publish(keys.events, { userId });
+  await pipeline.exec();
+}
+
+export async function markUnread(userId: string): Promise<void> {
+  const pipeline = getRedis().pipeline();
+  pipeline.hincrby(keys.user(userId), "unread", 1);
+  pipeline.publish(keys.events, { userId });
+  await pipeline.exec();
+}
+
+export async function markRead(userId: string): Promise<void> {
+  const pipeline = getRedis().pipeline();
+  pipeline.hset(keys.user(userId), { unread: 0 });
+  pipeline.publish(keys.events, { userId });
+  await pipeline.exec();
+}
+
+export function subscribeToChanges(onChange: (userId: string) => void): () => Promise<void> {
+  const subscriber = getRedis().subscribe<{ userId: string }>(keys.events);
+  subscriber.on("message", ({ message }) => onChange(String(message.userId)));
+  subscriber.on("error", (error) => console.error("redis subscribe failed", error));
+  return () => subscriber.unsubscribe();
 }
 
 export async function listUsers(): Promise<ChatUser[]> {
@@ -104,6 +135,7 @@ export async function listUsers(): Promise<ChatUser[]> {
       lastMessage: String(hash.lastMessage ?? ""),
       lastMessageAt: Number(hash.lastMessageAt ?? 0),
       mode: toMode(hash.mode),
+      unread: Number(hash.unread ?? 0),
     };
   });
 }

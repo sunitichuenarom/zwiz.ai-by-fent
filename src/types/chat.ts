@@ -9,6 +9,7 @@ export interface ChatUser {
   lastMessage: string;
   lastMessageAt: number;
   mode: ReplyMode;
+  unread: number;
 }
 
 export interface ChatMessage {

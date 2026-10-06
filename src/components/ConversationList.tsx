@@ -28,7 +28,11 @@ export function ConversationList({ users, selectedId, onSelect }: Props) {
               <Avatar name={user.displayName} pictureUrl={user.pictureUrl} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="truncate text-sm font-medium text-white">
+                  <span
+                    className={`truncate text-sm text-white ${
+                      user.unread > 0 ? "font-semibold" : "font-medium"
+                    }`}
+                  >
                     {user.displayName}
                   </span>
                   <span className="shrink-0 text-xs text-neutral-500">
@@ -42,9 +46,17 @@ export function ConversationList({ users, selectedId, onSelect }: Props) {
                   {user.mode === "ai" && (
                     <span
                       title="Zwiz AI กำลังตอบลูกค้ารายนี้"
-                      className="shrink-0 rounded-full bg-brand px-1.5 text-[11px] font-semibold text-white"
+                      className="shrink-0 rounded-full border border-brand px-1.5 text-[11px] font-semibold text-brand"
                     >
                       AI
+                    </span>
+                  )}
+                  {user.unread > 0 && (
+                    <span
+                      aria-label={`ยังไม่อ่าน ${user.unread} ข้อความ`}
+                      className="min-w-5 shrink-0 rounded-full bg-brand px-1.5 text-center text-[11px] font-semibold text-white"
+                    >
+                      {user.unread > 99 ? "99+" : user.unread}
                     </span>
                   )}
                 </div>

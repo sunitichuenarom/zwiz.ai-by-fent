@@ -1,4 +1,4 @@
-export const POLL_INTERVAL_MS = 3000;
+export const FALLBACK_POLL_MS = 30_000;
 
 export const DEMO_NOTICE = "เดโมสำหรับแบบทดสอบ ไม่ใช่ผลิตภัณฑ์ทางการของ ZWIZ.AI";
 

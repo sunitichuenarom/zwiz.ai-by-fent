@@ -10,10 +10,11 @@ import {
   getMode,
   isDuplicateEvent,
   listMessages,
+  markUnread,
   setMode,
   upsertUser,
 } from "./store";
-import type { ChatMessage } from "@/types/chat";
+import type { ChatMessage, ReplyMode } from "@/types/chat";
 
 const AI_HISTORY_SIZE = 12;
 
@@ -118,6 +119,7 @@ async function answerWithAi(userId: string, replyToken: string): Promise<void> {
   } catch (error) {
     console.error("AI reply failed", userId, describeError(error));
     await setMode(userId, "human");
+    await markUnread(userId);
     await addSystemNote(userId, "Zwiz AI ตอบไม่ได้ ส่งต่อให้แอดมิน");
     await replyAsAi(userId, replyToken, AI_FAILED, []);
     return;
@@ -130,9 +132,9 @@ async function respond(
   userId: string,
   replyToken: string,
   message: webhook.MessageContent,
+  intent: Intent,
+  mode: ReplyMode,
 ): Promise<void> {
-  const intent = message.type === "text" ? detectIntent(message.text) : null;
-
   if (intent === "ai_on") {
     if (!isAiConfigured()) {
       await replyAsAi(userId, replyToken, AI_UNAVAILABLE, []);
@@ -150,7 +152,7 @@ async function respond(
     return;
   }
 
-  if ((await getMode(userId)) !== "ai") return;
+  if (mode !== "ai") return;
   if (message.type !== "text") {
     await replyAsAi(userId, replyToken, TEXT_ONLY, [TALK_TO_ADMIN]);
     return;
@@ -179,15 +181,21 @@ export async function handleEvent(event: webhook.Event): Promise<void> {
     return;
   }
 
-  await addMessage({
-    id: event.message.id,
-    userId,
-    sender: "customer",
-    type: event.message.type,
-    text: messageToText(event.message),
-    timestamp: event.timestamp,
-  });
-  if (event.replyToken) await respond(userId, event.replyToken, event.message);
+  const mode = await getMode(userId);
+  const intent = event.message.type === "text" ? detectIntent(event.message.text) : null;
+  const needsAdmin = intent === "ai_off" || (mode === "human" && intent !== "ai_on");
+  await addMessage(
+    {
+      id: event.message.id,
+      userId,
+      sender: "customer",
+      type: event.message.type,
+      text: messageToText(event.message),
+      timestamp: event.timestamp,
+    },
+    { unread: needsAdmin },
+  );
+  if (event.replyToken) await respond(userId, event.replyToken, event.message, intent, mode);
 }
 
 export async function pushText(userId: string, text: string): Promise<ChatMessage> {

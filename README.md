@@ -59,7 +59,8 @@ sequenceDiagram
         W->>L: Reply API
         L->>U: คำตอบจาก Zwiz AI
     end
-    A->>W: polling GET /api/conversations (ทุก 3 วิ)
+    W-->>A: Server-Sent Events แจ้งทันทีว่ามีข้อมูลใหม่
+    A->>W: GET /api/conversations
     W-->>A: รายชื่อ + ข้อความ + โหมดการตอบ
     A->>W: POST /api/conversations/:userId/messages
     W->>L: Push Message API
@@ -71,7 +72,7 @@ sequenceDiagram
 | Framework | Next.js 16 (App Router) + TypeScript | ตามโจทย์ |
 | Backend | Route Handlers | ไม่ต้องมี server แยก deploy ที่ Vercel ที่เดียว |
 | Storage | Upstash Redis | function บน Vercel เก็บ state ใน memory ไม่ได้ และ Redis ต่อผ่าน HTTP ได้ ทุก key ขึ้นต้นด้วย `zwiz-chat:` จึงใช้ฐานข้อมูลร่วมกับโปรเจกต์อื่นได้ |
-| Realtime | Polling ด้วย SWR ทุก 3 วินาที | เรียบง่ายพอสำหรับ POC (WebSocket บน Vercel ยังเป็น beta) |
+| Realtime | Server-Sent Events + Redis Pub/Sub | server ดันเหตุการณ์ไปหน้าเว็บทันทีที่มีข้อมูลใหม่ และมี polling ทุก 30 วินาทีเป็นตัวสำรอง |
 | แอดมินตอบ | Push Message API | ตอบได้ทุกเมื่อ ส่วน reply token ใช้ได้แค่ 1 นาที |
 | AI ตอบ | Reply API + DeepSeek | AI ตอบทันทีจึงทัน reply token และไม่กินโควตา Push |
 
@@ -84,11 +85,13 @@ src/
 │  └─ api/
 │     ├─ line/webhook/route.ts               รับ event จาก LINE
 │     ├─ auth/route.ts                       ตรวจรหัสเข้าใช้งาน
+│     ├─ events/route.ts                     GET สตรีมเหตุการณ์แบบ Server-Sent Events
 │     └─ conversations/
 │        ├─ route.ts                         GET รายชื่อ user
 │        └─ [userId]/
 │           ├─ messages/route.ts             GET ประวัติ, POST ส่งข้อความ
-│           └─ mode/route.ts                 POST สลับผู้ตอบ (แอดมิน หรือ AI)
+│           ├─ mode/route.ts                 POST สลับผู้ตอบ (แอดมิน หรือ AI)
+│           └─ read/route.ts                 POST ล้างตัวนับข้อความที่ยังไม่อ่าน
 ├─ components/                               UI ฝั่ง client
 ├─ lib/
 │  ├─ store.ts                               ไฟล์เดียวที่รู้จัก Redis
@@ -143,7 +146,8 @@ pnpm dev
 - **ความรู้ของ AI**: เป็นข้อความคงที่ในโค้ด ถ้าหน้าเว็บ ZWIZ.AI เปลี่ยน ต้องแก้ไฟล์ตาม
 - **ปุ่มสลับผู้ตอบ**: อยู่ใน rich menu ซึ่งแสดงเฉพาะ LINE บนมือถือ ส่วน LINE บน PC ไม่แสดงทั้ง rich menu และ quick reply ลูกค้าต้องพิมพ์ "ถาม AI" หรือ "คุยกับแอดมิน" เอง
 - **Passcode**: เป็นรหัสเดียวใช้ร่วมกัน กรอกได้ 20 ครั้งต่อ IP ต่อ 10 นาที
-- **Polling**: ทุกแท็บที่เปิดอยู่ใช้ command ของ Redis ต่อเนื่อง (free tier มี 500K ต่อเดือน) และหยุดเองเมื่อแท็บถูกซ่อน
+- **Realtime**: ใช้ Server-Sent Events ทางเดียวจาก server ไปหน้าเว็บ การเชื่อมต่อถูกตัดตามเพดานเวลาของ function บน Vercel (300 วินาที) แล้วเบราว์เซอร์ต่อใหม่เอง
+- **การแจ้งเตือน**: จำนวนข้อความที่ยังไม่อ่านขึ้นที่ชื่อแท็บ ส่วนการแจ้งเตือนของเบราว์เซอร์ต้องกดอนุญาตก่อน และทำงานเฉพาะตอนที่ยังเปิดหน้าเว็บค้างไว้
 - **ประวัติ**: เก็บ 500 ข้อความล่าสุดต่อคน แสดง 100 ข้อความล่าสุด และรายชื่อ 50 คนล่าสุด
 
 ## ต่อยอด
@@ -152,7 +156,7 @@ pnpm dev
 - ป้ายกำกับ สถานะ โน้ต และข้อความสำเร็จรูป
 - AI สรุปการคุยและแปลภาษาให้แอดมิน
 - จัดการ event `unfollow` เพื่อบอกแอดมินว่าผู้ใช้ block แล้ว
-- แสดงรูปและไฟล์จริง และตัวนับข้อความที่ยังไม่อ่าน
-- เปลี่ยน polling เป็น WebSocket หรือ SSE
+- แสดงรูปและไฟล์จริง
+- Web Push เพื่อแจ้งเตือนแม้ปิดหน้าเว็บไปแล้ว
 - ระบบ login รายคนและการมอบหมายงานระหว่างแอดมิน
 - Automated tests สำหรับการตรวจ signature การกัน event ซ้ำ และการสลับโหมด AI

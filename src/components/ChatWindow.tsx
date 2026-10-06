@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import { Avatar } from "./Avatar";
 import { MessageBubble } from "./MessageBubble";
 import { MessageInput } from "./MessageInput";
-import { fetcher, POLL_INTERVAL_MS } from "@/lib/fetcher";
+import { fetcher, FALLBACK_POLL_MS } from "@/lib/fetcher";
+import { CONVERSATIONS_KEY, messagesKey } from "@/lib/useLiveUpdates";
 import type { ChatMessage, ChatUser, ReplyMode } from "@/types/chat";
 
 const PENDING_PREFIX = "pending-";
@@ -28,11 +29,12 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
 }
 
 export function ChatWindow({ user, onBack, onChanged }: Props) {
-  const base = `/api/conversations/${encodeURIComponent(user.userId)}`;
+  const base = `${CONVERSATIONS_KEY}/${encodeURIComponent(user.userId)}`;
+  const { mutate: mutateGlobal } = useSWRConfig();
   const { data: messages, error: loadError, mutate } = useSWR<ChatMessage[]>(
-    `${base}/messages`,
+    messagesKey(user.userId),
     fetcher,
-    { refreshInterval: POLL_INTERVAL_MS },
+    { refreshInterval: FALLBACK_POLL_MS },
   );
   const [error, setError] = useState("");
   const [switching, setSwitching] = useState(false);
@@ -43,6 +45,18 @@ export function ChatWindow({ user, onBack, onChanged }: Props) {
   useEffect(() => {
     bottomRef.current?.scrollIntoView();
   }, [lastMessageId]);
+
+  const unread = user.unread;
+  useEffect(() => {
+    if (unread === 0) return;
+    const markRead = () => {
+      if (document.visibilityState !== "visible") return;
+      void fetch(`${base}/read`, { method: "POST" }).then(() => mutateGlobal(CONVERSATIONS_KEY));
+    };
+    markRead();
+    document.addEventListener("visibilitychange", markRead);
+    return () => document.removeEventListener("visibilitychange", markRead);
+  }, [unread, base, mutateGlobal]);
 
   async function send(text: string): Promise<boolean> {
     setError("");
