@@ -70,7 +70,7 @@ sequenceDiagram
 | --- | --- | --- |
 | Framework | Next.js 16 (App Router) + TypeScript | ตามโจทย์ |
 | Backend | Route Handlers | ไม่ต้องมี server แยก deploy ที่ Vercel ที่เดียว |
-| Storage | Upstash Redis | function บน Vercel เก็บ state ใน memory ไม่ได้ และ Redis ต่อผ่าน HTTP ได้ |
+| Storage | Upstash Redis | function บน Vercel เก็บ state ใน memory ไม่ได้ และ Redis ต่อผ่าน HTTP ได้ ทุก key ขึ้นต้นด้วย `zwiz-chat:` จึงใช้ฐานข้อมูลร่วมกับโปรเจกต์อื่นได้ |
 | Realtime | Polling ด้วย SWR ทุก 3 วินาที | เรียบง่ายพอสำหรับ POC (WebSocket บน Vercel ยังเป็น beta) |
 | แอดมินตอบ | Push Message API | ตอบได้ทุกเมื่อ ส่วน reply token ใช้ได้แค่ 1 นาที |
 | AI ตอบ | Reply API + DeepSeek | AI ตอบทันทีจึงทัน reply token และไม่กินโควตา Push |
@@ -115,7 +115,7 @@ src/
    | `LINE_CHANNEL_SECRET` | Developers Console → Basic settings |
    | `LINE_CHANNEL_ACCESS_TOKEN` | Developers Console → Messaging API |
    | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | Vercel ใส่ให้เมื่อเชื่อม Upstash (รองรับ `UPSTASH_REDIS_REST_*` ด้วย) |
-   | `APP_PASSCODE` | ตั้งเอง ถ้าไม่ตั้งจะเปิดให้เข้าได้ทุกคน |
+   | `APP_PASSCODE` | ตั้งเอง ยาวอย่างน้อย 12 ตัวอักษร ถ้าไม่ตั้งจะเปิดให้เข้าได้ทุกคน |
    | `DEEPSEEK_API_KEY` | [DeepSeek Platform](https://platform.deepseek.com) ถ้าไม่ตั้ง ปุ่ม "ถาม AI" จะไม่แสดง |
 
 5. ตั้ง Webhook URL ใน Developers Console เป็น `https://<project>.vercel.app/api/line/webhook`
@@ -142,7 +142,7 @@ pnpm dev
 - **Webhook**: ตอบ `200` ก่อนแล้วประมวลผลทีหลัง เพราะ LINE ให้เวลาตอบ 2 วินาที ถ้าประมวลผลล้มเหลว event นั้นจะหาย
 - **ความรู้ของ AI**: เป็นข้อความคงที่ในโค้ด ถ้าหน้าเว็บ ZWIZ.AI เปลี่ยน ต้องแก้ไฟล์ตาม
 - **ปุ่มสลับผู้ตอบ**: อยู่ใน rich menu ซึ่งแสดงเฉพาะ LINE บนมือถือ ส่วน LINE บน PC ไม่แสดงทั้ง rich menu และ quick reply ลูกค้าต้องพิมพ์ "ถาม AI" หรือ "คุยกับแอดมิน" เอง
-- **Passcode**: เป็นรหัสเดียวใช้ร่วมกัน ไม่มีการจำกัดจำนวนครั้งที่ลอง
+- **Passcode**: เป็นรหัสเดียวใช้ร่วมกัน กรอกได้ 20 ครั้งต่อ IP ต่อ 10 นาที
 - **Polling**: ทุกแท็บที่เปิดอยู่ใช้ command ของ Redis ต่อเนื่อง (free tier มี 500K ต่อเดือน) และหยุดเองเมื่อแท็บถูกซ่อน
 - **ประวัติ**: เก็บ 500 ข้อความล่าสุดต่อคน แสดง 100 ข้อความล่าสุด และรายชื่อ 50 คนล่าสุด
 
