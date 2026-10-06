@@ -1,4 +1,6 @@
-export type Direction = "in" | "out";
+export type Sender = "customer" | "admin" | "ai" | "system";
+
+export type ReplyMode = "human" | "ai";
 
 export interface ChatUser {
   userId: string;
@@ -6,12 +8,13 @@ export interface ChatUser {
   pictureUrl?: string;
   lastMessage: string;
   lastMessageAt: number;
+  mode: ReplyMode;
 }
 
 export interface ChatMessage {
   id: string;
   userId: string;
-  direction: Direction;
+  sender: Sender;
   type: string;
   text: string;
   timestamp: number;

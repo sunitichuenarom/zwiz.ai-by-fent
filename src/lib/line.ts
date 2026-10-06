@@ -1,13 +1,31 @@
 import { randomUUID } from "node:crypto";
 import { HTTPFetchError, messagingApi, type webhook } from "@line/bot-sdk";
+import { ASK_AI, TALK_TO_ADMIN, generateAiReply, isAiConfigured } from "./ai";
 import { env } from "./env";
 import {
   addMessage,
+  addSystemNote,
+  allowAiReply,
   fallbackName,
+  getMode,
   isDuplicateEvent,
+  listMessages,
+  setMode,
   upsertUser,
 } from "./store";
 import type { ChatMessage } from "@/types/chat";
+
+const AI_HISTORY_SIZE = 12;
+
+const GREETING = `สวัสดีค่ะ ขอบคุณที่เพิ่มเพื่อนกับ ZWIZ.AI (เดโม) นะคะ
+พิมพ์ข้อความทิ้งไว้ได้เลย แอดมินจะเข้ามาตอบค่ะ`;
+const GREETING_AI_HINT = `หรือกด “${ASK_AI}” เพื่อสอบถามบริการของ ZWIZ.AI ได้ทันที`;
+const AI_INTRO = `Zwiz AI พร้อมตอบแล้วค่ะ ถามเรื่องบริการ ฟีเจอร์ ราคาเริ่มต้น หรือโปรแกรมพาร์ทเนอร์ของ ZWIZ.AI ได้เลย
+หากต้องการคุยกับคน กด “${TALK_TO_ADMIN}” ได้ทุกเมื่อค่ะ`;
+const HANDOFF_ACK = "รับทราบค่ะ ส่งต่อให้แอดมินแล้ว รอสักครู่นะคะ";
+const TEXT_ONLY = "ตอนนี้ Zwiz AI อ่านได้เฉพาะข้อความตัวอักษรค่ะ รบกวนพิมพ์คำถามเข้ามาได้เลย";
+const AI_FAILED = "ขออภัยค่ะ ตอนนี้ Zwiz AI ตอบไม่ได้ ส่งต่อให้แอดมินแล้ว รอสักครู่นะคะ";
+const AI_UNAVAILABLE = "ขออภัยค่ะ ตอนนี้ระบบ AI ยังไม่เปิดใช้งาน แอดมินจะเข้ามาตอบแทนนะคะ";
 
 let client: messagingApi.MessagingApiClient | undefined;
 
@@ -32,6 +50,29 @@ export function messageToText(message: webhook.MessageContent): string {
   return PLACEHOLDERS[message.type] ?? `[${message.type}]`;
 }
 
+type Intent = "ai_on" | "ai_off" | null;
+
+export function detectIntent(text: string): Intent {
+  const normalized = text.toLowerCase().replace(/\s+/g, "");
+  if (normalized === ASK_AI.toLowerCase().replace(/\s+/g, "")) return "ai_on";
+  if (normalized === TALK_TO_ADMIN) return "ai_off";
+  return null;
+}
+
+function textMessage(text: string, quickReplies: string[]): messagingApi.TextMessage {
+  if (quickReplies.length === 0) return { type: "text", text };
+  return {
+    type: "text",
+    text,
+    quickReply: {
+      items: quickReplies.map((label) => ({
+        type: "action",
+        action: { type: "message", label, text: label },
+      })),
+    },
+  };
+}
+
 async function fetchProfile(userId: string) {
   try {
     const profile = await getLineClient().getProfile(userId);
@@ -40,6 +81,81 @@ async function fetchProfile(userId: string) {
     console.error("getProfile failed", userId, describeError(error));
     return { displayName: fallbackName(userId), pictureUrl: undefined };
   }
+}
+
+async function replyAsAi(
+  userId: string,
+  replyToken: string,
+  text: string,
+  quickReplies: string[],
+): Promise<void> {
+  try {
+    const response = await getLineClient().replyMessage({
+      replyToken,
+      messages: [textMessage(text, quickReplies)],
+    });
+    await addMessage({
+      id: response.sentMessages?.[0]?.id ?? randomUUID(),
+      userId,
+      sender: "ai",
+      type: "text",
+      text,
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    console.error("replyMessage failed", userId, describeError(error));
+  }
+}
+
+async function answerWithAi(userId: string, replyToken: string): Promise<void> {
+  let answer: string;
+  try {
+    if (!(await allowAiReply(userId))) throw new Error("AI reply limit reached");
+    void getLineClient()
+      .showLoadingAnimation({ chatId: userId, loadingSeconds: 30 })
+      .catch(() => {});
+    answer = await generateAiReply(await listMessages(userId, AI_HISTORY_SIZE));
+  } catch (error) {
+    console.error("AI reply failed", userId, describeError(error));
+    await setMode(userId, "human");
+    await addSystemNote(userId, "Zwiz AI ตอบไม่ได้ ส่งต่อให้แอดมิน");
+    await replyAsAi(userId, replyToken, AI_FAILED, []);
+    return;
+  }
+  if ((await getMode(userId)) !== "ai") return;
+  await replyAsAi(userId, replyToken, answer, [TALK_TO_ADMIN]);
+}
+
+async function respond(
+  userId: string,
+  replyToken: string,
+  message: webhook.MessageContent,
+): Promise<void> {
+  const intent = message.type === "text" ? detectIntent(message.text) : null;
+
+  if (intent === "ai_on") {
+    if (!isAiConfigured()) {
+      await replyAsAi(userId, replyToken, AI_UNAVAILABLE, []);
+      return;
+    }
+    await setMode(userId, "ai");
+    await addSystemNote(userId, `ลูกค้ากด “${ASK_AI}”`);
+    await replyAsAi(userId, replyToken, AI_INTRO, [TALK_TO_ADMIN]);
+    return;
+  }
+  if (intent === "ai_off") {
+    await setMode(userId, "human");
+    await addSystemNote(userId, `ลูกค้ากด “${TALK_TO_ADMIN}”`);
+    await replyAsAi(userId, replyToken, HANDOFF_ACK, isAiConfigured() ? [ASK_AI] : []);
+    return;
+  }
+
+  if ((await getMode(userId)) !== "ai") return;
+  if (message.type !== "text") {
+    await replyAsAi(userId, replyToken, TEXT_ONLY, [TALK_TO_ADMIN]);
+    return;
+  }
+  await answerWithAi(userId, replyToken);
 }
 
 export async function handleEvent(event: webhook.Event): Promise<void> {
@@ -52,27 +168,37 @@ export async function handleEvent(event: webhook.Event): Promise<void> {
   const profile = await fetchProfile(userId);
   await upsertUser({ userId, ...profile, seenAt: event.timestamp });
 
-  if (event.type === "message") {
-    await addMessage({
-      id: event.message.id,
+  if (event.type === "follow") {
+    const withAi = isAiConfigured();
+    await replyAsAi(
       userId,
-      direction: "in",
-      type: event.message.type,
-      text: messageToText(event.message),
-      timestamp: event.timestamp,
-    });
+      event.replyToken,
+      withAi ? `${GREETING} ${GREETING_AI_HINT}` : GREETING,
+      withAi ? [ASK_AI] : [],
+    );
+    return;
   }
+
+  await addMessage({
+    id: event.message.id,
+    userId,
+    sender: "customer",
+    type: event.message.type,
+    text: messageToText(event.message),
+    timestamp: event.timestamp,
+  });
+  if (event.replyToken) await respond(userId, event.replyToken, event.message);
 }
 
 export async function pushText(userId: string, text: string): Promise<ChatMessage> {
   const response = await getLineClient().pushMessage(
-    { to: userId, messages: [{ type: "text", text }] },
+    { to: userId, messages: [textMessage(text, isAiConfigured() ? [ASK_AI] : [])] },
     randomUUID(),
   );
   return {
     id: response.sentMessages?.[0]?.id ?? randomUUID(),
     userId,
-    direction: "out",
+    sender: "admin",
     type: "text",
     text,
     timestamp: Date.now(),

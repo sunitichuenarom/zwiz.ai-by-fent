@@ -19,21 +19,35 @@ export function ConversationList({ users, selectedId, onSelect }: Props) {
               type="button"
               onClick={() => onSelect(user.userId)}
               aria-current={selected}
-              className={`flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-neutral-50 ${
-                selected ? "bg-line/10 hover:bg-line/10" : ""
+              className={`flex w-full items-center gap-3 border-l-[3px] py-3 pr-4 pl-[13px] text-left ${
+                selected
+                  ? "border-brand bg-ink-soft"
+                  : "border-transparent hover:bg-ink-soft/50"
               }`}
             >
               <Avatar name={user.displayName} pictureUrl={user.pictureUrl} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="truncate font-medium">{user.displayName}</span>
-                  <span className="shrink-0 text-xs text-neutral-400">
+                  <span className="truncate text-sm font-medium text-white">
+                    {user.displayName}
+                  </span>
+                  <span className="shrink-0 text-xs text-neutral-500">
                     {formatTime(user.lastMessageAt)}
                   </span>
                 </div>
-                <p className="truncate text-sm text-neutral-500">
-                  {user.lastMessage || "เพิ่มเพื่อนแล้ว ยังไม่มีข้อความ"}
-                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-[13px] text-neutral-400">
+                    {user.lastMessage || "เพิ่มเพื่อนแล้ว ยังไม่มีข้อความ"}
+                  </p>
+                  {user.mode === "ai" && (
+                    <span
+                      title="Zwiz AI กำลังตอบลูกค้ารายนี้"
+                      className="shrink-0 rounded-full bg-brand px-1.5 text-[11px] font-semibold text-white"
+                    >
+                      AI
+                    </span>
+                  )}
+                </div>
               </div>
             </button>
           </li>

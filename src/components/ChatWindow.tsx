@@ -6,23 +6,38 @@ import { Avatar } from "./Avatar";
 import { MessageBubble } from "./MessageBubble";
 import { MessageInput } from "./MessageInput";
 import { fetcher, POLL_INTERVAL_MS } from "@/lib/fetcher";
-import type { ChatMessage, ChatUser } from "@/types/chat";
+import type { ChatMessage, ChatUser, ReplyMode } from "@/types/chat";
 
 const PENDING_PREFIX = "pending-";
 
 interface Props {
   user: ChatUser;
   onBack: () => void;
-  onSent: () => void;
+  onChanged: () => void;
 }
 
-export function ChatWindow({ user, onBack, onSent }: Props) {
-  const url = `/api/conversations/${encodeURIComponent(user.userId)}/messages`;
-  const { data: messages, error: loadError, mutate } = useSWR<ChatMessage[]>(url, fetcher, {
-    refreshInterval: POLL_INTERVAL_MS,
+async function postJson<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
-  const [sendError, setSendError] = useState("");
+  const data = (await res.json().catch(() => null)) as (T & { error?: string }) | null;
+  if (!res.ok || !data) throw new Error(data?.error ?? `ทำรายการไม่สำเร็จ (${res.status})`);
+  return data;
+}
+
+export function ChatWindow({ user, onBack, onChanged }: Props) {
+  const base = `/api/conversations/${encodeURIComponent(user.userId)}`;
+  const { data: messages, error: loadError, mutate } = useSWR<ChatMessage[]>(
+    `${base}/messages`,
+    fetcher,
+    { refreshInterval: POLL_INTERVAL_MS },
+  );
+  const [error, setError] = useState("");
+  const [switching, setSwitching] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const aiMode = user.mode === "ai";
 
   const lastMessageId = messages?.at(-1)?.id;
   useEffect(() => {
@@ -30,48 +45,51 @@ export function ChatWindow({ user, onBack, onSent }: Props) {
   }, [lastMessageId]);
 
   async function send(text: string): Promise<boolean> {
-    setSendError("");
+    setError("");
     const optimistic: ChatMessage = {
       id: `${PENDING_PREFIX}${crypto.randomUUID()}`,
       userId: user.userId,
-      direction: "out",
+      sender: "admin",
       type: "text",
       text,
       timestamp: Date.now(),
     };
     try {
       await mutate(
-        async (current = []) => {
-          const res = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text }),
-          });
-          const data = (await res.json().catch(() => null)) as
-            | (ChatMessage & { error?: string })
-            | null;
-          if (!res.ok || !data) {
-            throw new Error(data?.error ?? `ส่งไม่สำเร็จ (${res.status})`);
-          }
-          return [...current, data];
-        },
+        async (current = []) => [
+          ...current,
+          await postJson<ChatMessage>(`${base}/messages`, { text }),
+        ],
         {
           optimisticData: (current = []) => [...current, optimistic],
           rollbackOnError: true,
-          revalidate: false,
+          revalidate: true,
         },
       );
-      onSent();
+      onChanged();
       return true;
-    } catch (error) {
-      setSendError(error instanceof Error ? error.message : "ส่งไม่สำเร็จ");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "ส่งไม่สำเร็จ");
       return false;
     }
   }
 
+  async function switchMode(mode: ReplyMode) {
+    setError("");
+    setSwitching(true);
+    try {
+      await postJson(`${base}/mode`, { mode });
+      onChanged();
+      void mutate();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "สลับโหมดไม่สำเร็จ");
+    }
+    setSwitching(false);
+  }
+
   return (
     <section className="flex h-full min-w-0 flex-1 flex-col">
-      <header className="flex items-center gap-3 border-b border-neutral-200 bg-white px-4 py-3">
+      <header className="flex items-center gap-3 border-b border-neutral-200 bg-white px-4 py-3.5">
         <button
           type="button"
           onClick={onBack}
@@ -81,10 +99,24 @@ export function ChatWindow({ user, onBack, onSent }: Props) {
           ←
         </button>
         <Avatar name={user.displayName} pictureUrl={user.pictureUrl} />
-        <div className="min-w-0">
-          <h2 className="truncate font-semibold">{user.displayName}</h2>
-          <p className="truncate text-xs text-neutral-400">{user.userId}</p>
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-[15px] font-semibold">{user.displayName}</h2>
+          <p className={`truncate text-xs ${aiMode ? "text-brand-dark" : "text-neutral-400"}`}>
+            {aiMode ? "LINE · Zwiz AI กำลังตอบอัตโนมัติ" : "LINE · แอดมินเป็นผู้ตอบ"}
+          </p>
         </div>
+        <button
+          type="button"
+          disabled={switching}
+          onClick={() => void switchMode(aiMode ? "human" : "ai")}
+          className={`shrink-0 rounded-[10px] border px-3.5 py-1.5 text-[13px] font-medium disabled:opacity-50 ${
+            aiMode
+              ? "border-ink text-ink hover:bg-neutral-100"
+              : "border-neutral-300 text-neutral-600 hover:border-brand hover:text-brand-dark"
+          }`}
+        >
+          {aiMode ? "รับช่วงต่อจาก AI" : "ให้ Zwiz AI ตอบ"}
+        </button>
       </header>
 
       <div className="flex-1 space-y-2 overflow-y-auto p-4" aria-live="polite">
@@ -109,9 +141,14 @@ export function ChatWindow({ user, onBack, onSent }: Props) {
         <div ref={bottomRef} />
       </div>
 
-      {sendError && (
-        <p role="alert" className="border-t border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
-          {sendError}
+      {error && (
+        <p role="alert" className="border-t border-red-200 bg-red-50 px-4 py-2 text-[13px] text-red-700">
+          {error}
+        </p>
+      )}
+      {aiMode && (
+        <p className="bg-brand-soft/60 px-4 py-2 text-[13px] text-brand-dark">
+          Zwiz AI กำลังตอบลูกค้ารายนี้ · ส่งข้อความเพื่อรับช่วงต่อ
         </p>
       )}
       <MessageInput onSend={send} />

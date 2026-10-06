@@ -25,7 +25,7 @@ export function MessageInput({ onSend }: Props) {
         event.preventDefault();
         void send();
       }}
-      className="flex items-end gap-2 border-t border-neutral-200 bg-white p-3"
+      className="flex items-end gap-3 border-t border-neutral-200 bg-white p-4"
     >
       <textarea
         aria-label="ข้อความ"
@@ -41,12 +41,12 @@ export function MessageInput({ onSend }: Props) {
             void send();
           }
         }}
-        className="max-h-32 min-h-10 flex-1 resize-none rounded-xl border border-neutral-300 px-3 py-2 outline-none focus:border-line focus:ring-2 focus:ring-line/30 disabled:bg-neutral-50"
+        className="max-h-32 min-h-11 flex-1 resize-none rounded-xl border border-neutral-300 px-3.5 py-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/25 disabled:bg-neutral-50"
       />
       <button
         type="submit"
         disabled={!canSend}
-        className="h-10 rounded-xl bg-line px-5 font-medium text-white hover:bg-line-dark disabled:opacity-50"
+        className="h-11 rounded-xl bg-brand px-5 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
       >
         {sending ? "กำลังส่ง…" : "ส่ง"}
       </button>

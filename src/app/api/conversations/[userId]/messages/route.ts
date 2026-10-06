@@ -1,6 +1,13 @@
 import { isAuthorized, unauthorized } from "@/lib/auth";
 import { pushErrorMessage, pushText } from "@/lib/line";
-import { addMessage, listMessages, userExists } from "@/lib/store";
+import {
+  addMessage,
+  addSystemNote,
+  getMode,
+  listMessages,
+  setMode,
+  userExists,
+} from "@/lib/store";
 
 const MAX_TEXT_LENGTH = 5000;
 
@@ -39,6 +46,10 @@ export async function POST(req: Request, { params }: Context) {
     return Response.json({ error: pushErrorMessage(error) }, { status: 502 });
   }
 
+  if ((await getMode(userId)) === "ai") {
+    await setMode(userId, "human");
+    await addSystemNote(userId, "แอดมินรับช่วงต่อจาก Zwiz AI");
+  }
   await addMessage(message);
   return Response.json(message);
 }

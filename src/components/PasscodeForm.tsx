@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { Logo } from "./Logo";
+import { DEMO_NOTICE } from "@/lib/fetcher";
 
 export function PasscodeForm() {
   const router = useRouter();
@@ -32,14 +34,15 @@ export function PasscodeForm() {
   }
 
   return (
-    <main className="flex h-full items-center justify-center p-4">
+    <main className="flex h-full flex-col items-center justify-center gap-4 p-4">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5"
+        className="w-full max-w-sm rounded-2xl border border-neutral-200 bg-white p-6"
       >
-        <h1 className="text-lg font-semibold">LINE OA Webchat</h1>
-        <p className="mt-1 text-sm text-neutral-500">กรอกรหัสเพื่อเข้าใช้งาน</p>
-        <label htmlFor="passcode" className="mt-5 block text-sm font-medium">
+        <Logo />
+        <h1 className="mt-2 font-brand text-xl font-semibold">Zwiz Chat</h1>
+        <p className="text-[13px] text-neutral-500">กรอกรหัสเพื่อเข้าใช้งาน</p>
+        <label htmlFor="passcode" className="mt-4 block text-[13px] font-medium">
           รหัสเข้าใช้งาน
         </label>
         <input
@@ -49,21 +52,22 @@ export function PasscodeForm() {
           autoComplete="current-password"
           value={passcode}
           onChange={(event) => setPasscode(event.target.value)}
-          className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 outline-none focus:border-line focus:ring-2 focus:ring-line/30"
+          className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/25"
         />
         {error && (
-          <p role="alert" className="mt-2 text-sm text-red-600">
+          <p role="alert" className="mt-2 text-[13px] text-red-600">
             {error}
           </p>
         )}
         <button
           type="submit"
           disabled={submitting || !passcode}
-          className="mt-4 w-full rounded-lg bg-line px-4 py-2 font-medium text-white hover:bg-line-dark disabled:opacity-50"
+          className="mt-3 w-full rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
         >
           {submitting ? "กำลังตรวจสอบ…" : "เข้าใช้งาน"}
         </button>
       </form>
+      <p className="text-xs text-neutral-400">{DEMO_NOTICE}</p>
     </main>
   );
 }
