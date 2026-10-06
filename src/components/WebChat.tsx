@@ -7,6 +7,7 @@ import { ConversationList } from "./ConversationList";
 import { Logo } from "./Logo";
 import { UserDetails } from "./UserDetails";
 import { DEMO_NOTICE, fetcher, FALLBACK_POLL_MS } from "@/lib/fetcher";
+import { playNotificationSound, unlockSound } from "@/lib/sound";
 import { CONVERSATIONS_KEY, useLiveUpdates } from "@/lib/useLiveUpdates";
 import type { ChatUser } from "@/types/chat";
 
@@ -33,16 +34,30 @@ export function WebChat({ bot }: Props) {
   const [grantedNow, setGrantedNow] = useState(false);
   const canNotify = alreadyGranted || grantedNow;
 
+  const [soundOn, setSoundOn] = useState(true);
+
+  useEffect(() => {
+    window.addEventListener("pointerdown", unlockSound);
+    window.addEventListener("keydown", unlockSound);
+    return () => {
+      window.removeEventListener("pointerdown", unlockSound);
+      window.removeEventListener("keydown", unlockSound);
+    };
+  }, []);
+
   useEffect(() => {
     document.title = totalUnread > 0 ? `(${totalUnread}) Zwiz Chat` : "Zwiz Chat";
-    if (totalUnread > previousUnread.current && document.hidden && canNotify) {
-      new Notification(latestUnread?.displayName ?? "Zwiz Chat", {
-        body: latestUnread?.lastMessage ?? "มีข้อความใหม่",
-        tag: "zwiz-chat",
-      });
+    if (totalUnread > previousUnread.current) {
+      if (soundOn) playNotificationSound();
+      if (document.hidden && canNotify) {
+        new Notification(latestUnread?.displayName ?? "Zwiz Chat", {
+          body: latestUnread?.lastMessage ?? "มีข้อความใหม่",
+          tag: "zwiz-chat",
+        });
+      }
     }
     previousUnread.current = totalUnread;
-  }, [totalUnread, canNotify, latestUnread?.displayName, latestUnread?.lastMessage]);
+  }, [totalUnread, canNotify, soundOn, latestUnread?.displayName, latestUnread?.lastMessage]);
 
   async function enableNotifications() {
     if (!("Notification" in window)) return;
@@ -60,6 +75,20 @@ export function WebChat({ bot }: Props) {
           </span>
         </div>
         <div className="flex min-w-0 items-center gap-3">
+          <button
+            type="button"
+            aria-pressed={soundOn}
+            onClick={() => {
+              setSoundOn(!soundOn);
+              if (!soundOn) {
+                unlockSound();
+                playNotificationSound();
+              }
+            }}
+            className="shrink-0 rounded-lg border border-ink-soft px-2.5 py-1 text-xs text-neutral-300 hover:border-brand hover:text-white"
+          >
+            เสียงเตือน: {soundOn ? "เปิด" : "ปิด"}
+          </button>
           {!canNotify && (
             <button
               type="button"
