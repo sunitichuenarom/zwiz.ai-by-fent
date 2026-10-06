@@ -7,7 +7,7 @@
 > ข้อมูลที่ AI ใช้ตอบสรุปจากหน้าเว็บสาธารณะ https://zwiz.ai/th
 
 - Demo: `https://<project>.vercel.app`
-- เพิ่มเพื่อน OA: `https://line.me/R/ti/p/@<basic-id>`
+- เพิ่มเพื่อน OA: https://line.me/R/ti/p/@611nrixg (zwiz.ai-by-fent)
 
 ## การตีความโจทย์
 
