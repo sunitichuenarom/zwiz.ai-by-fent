@@ -6,7 +6,7 @@
 > เดโมสำหรับแบบทดสอบ Webchat ไม่ใช่ผลิตภัณฑ์ทางการของ ZWIZ.AI
 > ข้อมูลที่ AI ใช้ตอบสรุปจากหน้าเว็บสาธารณะ https://zwiz.ai/th
 
-- Demo: `https://<project>.vercel.app`
+- Demo: https://zwizai-by-fent.vercel.app
 - เพิ่มเพื่อน OA: https://line.me/R/ti/p/@611nrixg (zwiz.ai-by-fent)
 
 ## การตีความโจทย์
@@ -121,7 +121,7 @@ src/
    | `APP_PASSCODE` | ตั้งเอง ยาวอย่างน้อย 12 ตัวอักษร ถ้าไม่ตั้งจะเปิดให้เข้าได้ทุกคน |
    | `DEEPSEEK_API_KEY` | [DeepSeek Platform](https://platform.deepseek.com) ถ้าไม่ตั้ง ปุ่ม "ถาม AI" จะไม่แสดง |
 
-5. ตั้ง Webhook URL ใน Developers Console เป็น `https://<project>.vercel.app/api/line/webhook`
+5. ตั้ง Webhook URL ใน Developers Console เป็น `https://<โดเมนของโปรเจกต์>.vercel.app/api/line/webhook`
    เปิด Use webhook แล้วกด Verify
 6. ใน OA Manager → Response settings ปิด Auto-reply messages และ Greeting message
    (ระบบนี้ส่งข้อความทักทายพร้อมปุ่ม "ถาม AI" เองเมื่อมีคนเพิ่มเพื่อน)
