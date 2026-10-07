@@ -93,6 +93,7 @@ export function ChatWindow({ user, onBack, onChanged }: Props) {
     setSwitching(true);
     try {
       await postJson(`${base}/mode`, { mode });
+      await mutateGlobal(CONVERSATIONS_KEY);
       onChanged();
       void mutate();
     } catch (cause) {
@@ -122,14 +123,21 @@ export function ChatWindow({ user, onBack, onChanged }: Props) {
         <button
           type="button"
           disabled={switching}
+          aria-busy={switching}
           onClick={() => void switchMode(aiMode ? "human" : "ai")}
-          className={`shrink-0 rounded-[10px] border px-3.5 py-1.5 text-[13px] font-medium disabled:opacity-50 ${
+          className={`flex shrink-0 items-center gap-2 rounded-[10px] border px-3.5 py-1.5 text-[13px] font-medium disabled:cursor-wait disabled:opacity-70 ${
             aiMode
               ? "border-ink text-ink hover:bg-neutral-100"
               : "border-neutral-300 text-neutral-600 hover:border-brand hover:text-brand-dark"
           }`}
         >
-          {aiMode ? "รับช่วงต่อจาก AI" : "ให้ Zwiz AI ตอบ"}
+          {switching && (
+            <span
+              aria-hidden
+              className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent"
+            />
+          )}
+          {switching ? "กำลังสลับ…" : aiMode ? "รับช่วงต่อจาก AI" : "ให้ Zwiz AI ตอบ"}
         </button>
       </header>
 
