@@ -98,6 +98,7 @@ src/
 │  ├─ line.ts                                LINE client และตัวจัดการ event
 │  ├─ ai.ts                                  เรียก DeepSeek และ system prompt
 │  ├─ zwiz-knowledge.ts                      ความรู้ที่ AI ใช้ตอบ
+│  ├─ crypto.ts                              เข้ารหัสและถอดรหัสข้อมูลแชท
 │  └─ auth.ts                                passcode gate
 └─ types/chat.ts
 ```
@@ -118,6 +119,7 @@ src/
    | `LINE_CHANNEL_SECRET` | Developers Console → Basic settings |
    | `LINE_CHANNEL_ACCESS_TOKEN` | Developers Console → Messaging API |
    | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | Vercel ใส่ให้เมื่อเชื่อม Upstash (รองรับ `UPSTASH_REDIS_REST_*` ด้วย) |
+   | `DATA_ENCRYPTION_KEY` | สร้างเองด้วย `openssl rand -base64 32` ใช้เข้ารหัสข้อมูลแชทใน Redis ถ้ากุญแจหาย ข้อมูลเดิมจะอ่านไม่ได้ |
    | `APP_PASSCODE` | ตั้งเอง ยาวอย่างน้อย 12 ตัวอักษร ถ้าไม่ตั้งจะเปิดให้เข้าได้ทุกคน |
    | `DEEPSEEK_API_KEY` | [DeepSeek Platform](https://platform.deepseek.com) ถ้าไม่ตั้ง ปุ่ม "ถาม AI" จะไม่แสดง |
 
@@ -145,6 +147,7 @@ pnpm dev
 - **Webhook**: ตอบ `200` ก่อนแล้วประมวลผลทีหลัง เพราะ LINE ให้เวลาตอบ 2 วินาที ถ้าประมวลผลล้มเหลว event นั้นจะหาย
 - **ความรู้ของ AI**: เป็นข้อความคงที่ในโค้ด ถ้าหน้าเว็บ ZWIZ.AI เปลี่ยน ต้องแก้ไฟล์ตาม
 - **ปุ่มสลับผู้ตอบ**: อยู่ใน rich menu ซึ่งแสดงเฉพาะ LINE บนมือถือ ส่วน LINE บน PC ไม่แสดงทั้ง rich menu และ quick reply ลูกค้าต้องพิมพ์ "ถาม AI" หรือ "คุยกับแอดมิน" เอง
+- **การเข้ารหัส**: ข้อความแชท ชื่อ และรูปโปรไฟล์ถูกเข้ารหัสด้วย AES-256-GCM ก่อนเก็บลง Redis จึงอ่านได้เฉพาะผ่านเว็บนี้ แต่ไม่ใช่ end-to-end เพราะ server ต้องอ่านข้อความเพื่อแสดงผลและส่งให้ AI ส่วน userId เวลา และโหมดผู้ตอบไม่ได้เข้ารหัส
 - **Passcode**: เป็นรหัสเดียวใช้ร่วมกัน กรอกได้ 20 ครั้งต่อ IP ต่อ 10 นาที
 - **Realtime**: ใช้ Server-Sent Events ทางเดียวจาก server ไปหน้าเว็บ การเชื่อมต่อถูกตัดตามเพดานเวลาของ function บน Vercel (300 วินาที) แล้วเบราว์เซอร์ต่อใหม่เอง
 - **การแจ้งเตือน**: จำนวนข้อความที่ยังไม่อ่านขึ้นที่ชื่อแท็บ ส่วนการแจ้งเตือนของเบราว์เซอร์ต้องกดอนุญาตก่อน และทำงานเฉพาะตอนที่ยังเปิดหน้าเว็บค้างไว้

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { decrypt, encrypt } from "./crypto";
 import { getRedis } from "./redis";
 import type { ChatMessage, ChatUser, ReplyMode } from "@/types/chat";
 
@@ -38,7 +39,10 @@ export async function upsertUser(profile: {
 }): Promise<void> {
   const { userId, displayName, pictureUrl, seenAt } = profile;
   const pipeline = getRedis().pipeline();
-  pipeline.hset(keys.user(userId), { displayName, pictureUrl: pictureUrl ?? "" });
+  pipeline.hset(keys.user(userId), {
+    displayName: encrypt(displayName),
+    pictureUrl: encrypt(pictureUrl ?? ""),
+  });
   pipeline.zadd(keys.users, { nx: true }, { score: seenAt, member: userId });
   pipeline.publish(keys.events, { userId });
   await pipeline.exec();
@@ -50,11 +54,11 @@ export async function addMessage(
 ): Promise<void> {
   const { userId } = message;
   const pipeline = getRedis().pipeline();
-  pipeline.rpush(keys.messages(userId), message);
+  pipeline.rpush(keys.messages(userId), { ...message, text: encrypt(message.text) });
   pipeline.ltrim(keys.messages(userId), -MAX_MESSAGES_KEPT, -1);
   if (message.sender !== "system") {
     pipeline.hset(keys.user(userId), {
-      lastMessage: message.text,
+      lastMessage: encrypt(message.text),
       lastMessageAt: message.timestamp,
     });
     pipeline.zadd(keys.users, { score: message.timestamp, member: userId });
@@ -130,9 +134,9 @@ export async function listUsers(): Promise<ChatUser[]> {
     const hash = hashes[index] ?? {};
     return {
       userId,
-      displayName: String(hash.displayName ?? "") || fallbackName(userId),
-      pictureUrl: hash.pictureUrl ? String(hash.pictureUrl) : undefined,
-      lastMessage: String(hash.lastMessage ?? ""),
+      displayName: decrypt(String(hash.displayName ?? "")) || fallbackName(userId),
+      pictureUrl: hash.pictureUrl ? decrypt(String(hash.pictureUrl)) : undefined,
+      lastMessage: decrypt(String(hash.lastMessage ?? "")),
       lastMessageAt: Number(hash.lastMessageAt ?? 0),
       mode: toMode(hash.mode),
       unread: Number(hash.unread ?? 0),
@@ -145,7 +149,7 @@ export async function listMessages(
   limit = MAX_MESSAGES_RETURNED,
 ): Promise<ChatMessage[]> {
   const messages = await getRedis().lrange<ChatMessage>(keys.messages(userId), -limit, -1);
-  return messages.map((message) => ({ ...message, text: String(message.text) }));
+  return messages.map((message) => ({ ...message, text: decrypt(String(message.text)) }));
 }
 
 export async function allowAiReply(userId: string): Promise<boolean> {
